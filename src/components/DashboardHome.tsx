@@ -269,7 +269,7 @@ export default function DashboardHome({ address, userId, onNavigateToAgent, onLo
                     <div className="space-y-3">
                         {loading ? (
                             // Skeleton Loading State
-                            Array(3).fill(0).map((_, i) => (
+                            Array(1).fill(0).map((_, i) => (
                                 <div key={i} className="px-4 py-4 bg-card rounded-2xl flex items-center justify-between border border-border/30">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-full bg-muted animate-pulse" />

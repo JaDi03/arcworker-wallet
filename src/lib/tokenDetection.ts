@@ -51,13 +51,7 @@ export interface TokenBalance {
  * Known tokens on Arc Testnet
  */
 const ARC_TESTNET_TOKENS = [
-    {
-        address: 'native',
-        symbol: 'ARC',
-        name: 'ARC Token',
-        decimals: 18,
-        isNative: true
-    },
+
     {
         address: '0x3600000000000000000000000000000000000000',
         symbol: 'USDC',
