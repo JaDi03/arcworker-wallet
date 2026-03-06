@@ -76,13 +76,10 @@ export const SwapSkill = {
                 return { success: false, message: 'Missing userId in context' };
             }
 
-            const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
-            const walletResp = await fetch(`${baseUrl}/api/wallet`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'getOrCreateWallet', userId, blockchain: chainKey }),
-            });
-            const { walletId, address: userAddress } = await walletResp.json();
+            // Direct import - no HTTP loopback (ECONNREFUSED on Vercel serverless)
+            const { getOrCreateWallet, executeContractCall: execContract } = await import('@/lib/serverWallet');
+            const walletData = await getOrCreateWallet(userId, chainKey);
+            const { walletId, address: userAddress } = walletData;
 
             // 5. Setup public client
             const viemChain = chainKey === 'arcTestnet'
@@ -167,22 +164,13 @@ export const SwapSkill = {
             // 11. Approve if needed
             if (allowance < amountIn) {
                 console.log(`[SwapSkill] Approving ${fromToken} for router...`);
-                // ensure baseUrl is defined in scope or redefined
-
-                const approveResp = await fetch(`${baseUrl}/api/wallet`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'executeContractCall',
-                        userId,
-                        walletId,
-                        contractAddress: fromAddress,
-                        functionSignature: 'approve(address,uint256)',
-                        parameters: [config.router, amountIn.toString()],
-                        blockchain: chainKey
-                    }),
-                });
-                const approveResult = await approveResp.json();
+                const approveResult = await execContract(
+                    walletId,
+                    fromAddress,
+                    'approve(address,uint256)',
+                    [config.router, amountIn.toString()],
+                    chainKey
+                );
                 if (!approveResult.success) {
                     return { success: false, message: `Approval failed: ${approveResult.error}` };
                 }
@@ -200,27 +188,19 @@ export const SwapSkill = {
             console.log(`  Slippage: ${slippage}%`);
 
 
-            const swapResp = await fetch(`${baseUrl}/api/wallet`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'executeContractCall',
-                    userId,
-                    walletId,
-                    contractAddress: config.router,
-                    functionSignature: 'swapExactTokensForTokens(uint256,uint256,address[],address,uint256)',
-                    parameters: [
-                        amountIn.toString(),
-                        minOut.toString(),
-                        path,
-                        userAddress,
-                        deadline.toString()
-                    ],
-                    blockchain: chainKey
-                }),
-            });
-
-            const swapResult = await swapResp.json();
+            const swapResult = await execContract(
+                walletId,
+                config.router,
+                'swapExactTokensForTokens(uint256,uint256,address[],address,uint256)',
+                [
+                    amountIn.toString(),
+                    minOut.toString(),
+                    path,
+                    userAddress,
+                    deadline.toString()
+                ],
+                chainKey
+            );
             if (!swapResult.success) {
                 return { success: false, message: `Swap failed: ${swapResult.error}` };
             }
