@@ -1,0 +1,119 @@
+import { NextResponse } from 'next/server';
+import { getOrCreateWallet } from '@/lib/serverWallet';
+
+// Vercel Edge/Serverless config - Allow up to 60s for wallet creation if needed
+export const maxDuration = 60;
+
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const NEXT_PUBLIC_URL = process.env.NEXT_PUBLIC_URL || 'https://modular-wallet.vercel.app'; // Fallback to production URL
+
+/**
+ * Handle incoming Telegram Webhook updates
+ * telegram api docs: https://core.telegram.org/bots/api#update
+ */
+export async function POST(req: Request) {
+    if (!TELEGRAM_BOT_TOKEN) {
+        console.error('[Telegram Webhook] Error: TELEGRAM_BOT_TOKEN is not defined');
+        return NextResponse.json({ error: 'Bot token not configured' }, { status: 500 });
+    }
+
+    try {
+        const body = await req.json();
+        const message = body.message;
+
+        // Only handle text messages (like /start)
+        if (!message || !message.text) {
+            return NextResponse.json({ success: true, message: 'Not a text message, ignoring.' });
+        }
+
+        const text = message.text.trim();
+        const chatId = message.chat.id;
+        // Telegram user IDs are numeric. We prefix them to create a unique standard user ID for our platform.
+        const userId = `tg_${message.from.id}`;
+        const username = message.from.username || message.from.first_name || 'User';
+
+        console.log(`[Telegram Webhook] Received message "${text}" from ${username} (${userId})`);
+
+        if (text.startsWith('/start')) {
+            // 1. Send an initial "typing" action or immediate "Creating wallet..." message to acknowledge
+            await sendTelegramMessage(chatId, `Welcome to ArcWallet, ${username}!\n\nI am provisioning your personal smart wallet on Arc Testnet. This might take a few seconds...`);
+
+            // 2. Safely create or fetch the Circle developer-controlled wallet
+            try {
+                // Ensure the wallet exists before they even open the app
+                const wallet = await getOrCreateWallet(userId, 'arcTestnet');
+                console.log(`[Telegram Webhook] Wallet ensured for ${userId}: ${wallet.address}`);
+
+                // 3. Send the final message with the Web App button
+                await sendTelegramMessageWithWebApp(
+                    chatId,
+                    `✅ **Wallet Ready!**\n\nYour address is: \`${wallet.address}\`\n\nClick the button below to open your wallet and start sending/receiving USDC.`,
+                    NEXT_PUBLIC_URL
+                );
+
+            } catch (error: any) {
+                console.error(`[Telegram Webhook] Failed to create wallet for ${userId}:`, error);
+                await sendTelegramMessage(chatId, `⚠️ Sorry, there was an issue creating your wallet. Please try again later.\n\nError: ${error.message}`);
+            }
+        } else {
+            // Unrecognized command
+            await sendTelegramMessageWithWebApp(
+                chatId,
+                `Hi ${username}! I am your ArcWallet bot. Use /start to see the menu, or just open your wallet below.`,
+                NEXT_PUBLIC_URL
+            );
+        }
+
+        return NextResponse.json({ success: true });
+
+    } catch (error: any) {
+        console.error('[Telegram Webhook] Internal Error:', error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
+
+/**
+ * Helper function to send a standard text message back to the Telegram Chat
+ */
+async function sendTelegramMessage(chatId: number, text: string) {
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            chat_id: chatId,
+            text: text,
+            parse_mode: 'Markdown'
+        })
+    });
+}
+
+/**
+ * Helper function to send a text message with an Inline Keyboard Button that opens a Telegram Web App
+ */
+async function sendTelegramMessageWithWebApp(chatId: number, text: string, webAppUrl: string) {
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+
+    await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            chat_id: chatId,
+            text: text,
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        {
+                            text: "📱 Open ArcWallet",
+                            web_app: {
+                                url: webAppUrl
+                            }
+                        }
+                    ] // You can add more buttons here like [ {text: "Join Community", url: "https://t.me/..."} ]
+                ]
+            }
+        })
+    });
+}

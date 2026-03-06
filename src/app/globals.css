@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+@layer base {
+  :root {
+    --background: 210 40% 99%;
+    /* Ultra clean light mode */
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 221 100% 50%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 160 100% 45%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 160 100% 45%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221 100% 50%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 222 35% 14%;
+    /* Premium "Rich Midnight" - Not too dark */
+    --foreground: 210 40% 98%;
+    --card: 222 35% 18%;
+    /* Layered card feel */
+    --card-foreground: 210 40% 98%;
+    --popover: 222 35% 16%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 221 100% 64%;
+    /* Brighter primary for dark mode */
+    --primary-foreground: 210 40% 98%;
+    --secondary: 160 100% 45%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 222 35% 22%;
+    --muted-foreground: 215 20.2% 75%;
+    --accent: 160 100% 45%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 45%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 222 35% 22%;
+    --input: 222 35% 22%;
+    --ring: 160 100% 45%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.3s ease-out forwards;
+}
