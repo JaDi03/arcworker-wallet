@@ -9,27 +9,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { WalletSession } from "@/lib/wallet-sdk";
 
 function AppContent() {
-    const { webApp, user } = useTelegram();
+    const { webApp, user, isReady } = useTelegram();
     const [session, setSession] = useState<WalletSession | null>(null);
     const [view, setView] = useState<"dashboard" | "agent">("dashboard");
-
-    // Prioritize Telegram User ID first to ensure same wallet across mobile/desktop
-    let finalUserId: string | null = null;
-
-    if (user?.id) {
-        finalUserId = `tg_${user.id}`;
-    } else if (typeof window !== 'undefined') {
-        // Fallback for when testing the web app outside of Telegram
-        finalUserId = localStorage.getItem('wallet_user_id');
-        if (!finalUserId) {
-            finalUserId = `browser_${Math.random().toString(36).substring(2, 12)}`;
-            localStorage.setItem('wallet_user_id', finalUserId);
-        }
-    } else {
-        finalUserId = `server_${Date.now()}`;
-    }
-
-    const userId = finalUserId;
+    const [userId, setUserId] = useState<string | null>(null);
 
     // Chat Persistence
     const [messages, setMessages] = useState<Message[]>([
@@ -47,26 +30,44 @@ function AppContent() {
         },
     ]);
 
-    // Check for session persistence
-    useEffect(() => {
-        // In a real app, you might check localStorage or a cookie here
-        // But for Passkeys, usually you need to re-authenticate or keep token in memory
-    }, []);
-
     const handleLoginSuccess = (sess: WalletSession) => {
         setSession(sess);
         setView("dashboard");
     };
 
-    // Auto-Login for Demo (Bypass WalletConnect UI)
+    // === STEP 1: Derive userId AFTER component mounts ===
+    // Read Telegram SDK directly from window (it's synchronous) instead of
+    // relying on the TelegramProvider's useEffect which hasn't fired yet
     useEffect(() => {
-        if (!userId) return;
+        if (typeof window === 'undefined') return;
+
+        const tg = (window as any).Telegram?.WebApp;
+        const tgUser = tg?.initDataUnsafe?.user;
+
+        if (tgUser?.id) {
+            const tgId = `tg_${tgUser.id}`;
+            console.log(`[Identity] Telegram user detected: ${tgId}`);
+            setUserId(tgId);
+        } else {
+            // Browser fallback (local dev or direct URL access)
+            let browserId = localStorage.getItem('wallet_user_id');
+            if (!browserId) {
+                browserId = `browser_${Math.random().toString(36).substring(2, 12)}`;
+                localStorage.setItem('wallet_user_id', browserId);
+            }
+            console.log(`[Identity] Browser fallback: ${browserId}`);
+            setUserId(browserId);
+        }
+    }, []);
+
+    // === STEP 2: Auto-login AFTER userId is finalized ===
+    useEffect(() => {
+        if (!userId || session) return;
 
         let isMounted = true;
 
         const autoLogin = async () => {
             try {
-                // Fetch autonomous wallet
                 const response = await fetch('/api/wallet', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -74,7 +75,6 @@ function AppContent() {
                 });
                 const data = await response.json();
 
-                // Only update state if component is still mounted
                 if (isMounted && (data.success || data.walletId)) {
                     const sess: WalletSession = {
                         address: data.address,
@@ -91,9 +91,7 @@ function AppContent() {
             }
         };
 
-        if (!session) {
-            autoLogin();
-        }
+        autoLogin();
 
         return () => {
             isMounted = false;
@@ -105,6 +103,15 @@ function AppContent() {
         setView("dashboard");
         setMessages([]); // Clear chat on logout
     };
+
+    // === LOADING: Wait for userId to resolve before rendering anything ===
+    if (!userId) {
+        return (
+            <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 dark:bg-slate-950">
+                <div className="animate-pulse text-slate-500 dark:text-slate-400">Loading wallet...</div>
+            </main>
+        );
+    }
 
     if (session) {
         if (view === "agent") {
@@ -147,7 +154,6 @@ function AppContent() {
                         <span className="hidden text-xl font-bold bg-gradient-to-r from-[#00E599] to-[#0052FF] bg-clip-text text-transparent">
                             ArcWorker Wallet
                         </span>
-                        {/* Fallback Text if Image fails (and JS handles toggling) or just always show text next to logo? User asked for branding. */}
                     </div>
                 </div>
             </div>
