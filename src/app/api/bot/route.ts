@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 
         if (text.startsWith('/start')) {
             // 1. Send an initial "typing" action or immediate "Creating wallet..." message to acknowledge
-            const welcomeMsg = `🤖 *¡Bienvenido a ArcWorker Wallet!*\nLa infraestructura más rápida para operar en Web3.\n\n⏳ _Aprovisionando tu Smart Wallet en Arc Testnet..._`;
+            const welcomeMsg = `🤖 <b>¡Bienvenido a ArcWorker Wallet!</b>\nLa infraestructura más rápida para operar en Web3.\n\n⏳ <i>Aprovisionando tu Smart Wallet en Arc Testnet...</i>`;
             await sendTelegramMessage(chatId, welcomeMsg);
 
             // 2. Safely create or fetch the Circle developer-controlled wallet
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
                 console.log(`[Telegram Webhook] Wallet ensured for ${userId}: ${wallet.address}`);
 
                 // 3. Send the final message with the Web App button
-                const successMsg = `✅ *Smart Wallet Activada*\n\n👤 *Usuario:* @${username}\n💳 *Dirección:* \`${wallet.address}\`\n⚡ *Red:* ARC Testnet\n\n👇 Haz clic abajo para entrar y gestionar tus fondos:`;
+                const successMsg = `✅ <b>Smart Wallet Activada</b>\n\n👤 <b>Usuario:</b> @${username}\n💳 <b>Dirección:</b> <code>${wallet.address}</code>\n⚡ <b>Red:</b> ARC Testnet\n\n👇 Haz clic abajo para entrar y gestionar tus fondos:`;
 
                 await sendTelegramMessageWithWebApp(
                     chatId,
@@ -56,13 +56,13 @@ export async function POST(req: Request) {
 
             } catch (error: any) {
                 console.error(`[Telegram Webhook] Failed to create wallet for ${userId}:`, error);
-                await sendTelegramMessage(chatId, `⚠️ *Error de Creación*\n\nLo sentimos, hubo un problema técnico aprovisionando tu billetera. Por favor intenta más tarde.\n\n_Detalle: ${error.message}_`);
+                await sendTelegramMessage(chatId, `⚠️ <b>Error de Creación</b>\n\nLo sentimos, hubo un problema técnico aprovisionando tu billetera. Por favor intenta más tarde.\n\n<i>Detalle: ${error.message}</i>`);
             }
         } else {
             // Unrecognized command
             await sendTelegramMessageWithWebApp(
                 chatId,
-                `🤖 *ArcWorker Bot*\n\nUtiliza el comando /start para ver tu perfil, o abre directamente tu billetera en el botón de abajo.👇`,
+                `🤖 <b>ArcWorker Bot</b>\n\nUtiliza el comando /start para ver tu perfil, o abre directamente tu billetera en el botón de abajo.👇`,
                 NEXT_PUBLIC_URL
             );
         }
@@ -81,15 +81,24 @@ export async function POST(req: Request) {
 async function sendTelegramMessage(chatId: number, text: string) {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            chat_id: chatId,
-            text: text,
-            parse_mode: 'Markdown'
-        })
-    });
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: chatId,
+                text: text,
+                parse_mode: 'HTML'
+            })
+        });
+
+        const data = await response.json();
+        if (!data.ok) {
+            console.error('[Telegram API Error]', data.description);
+        }
+    } catch (e) {
+        console.error('[Telegram Fetch Error]', e);
+    }
 }
 
 /**
@@ -98,25 +107,34 @@ async function sendTelegramMessage(chatId: number, text: string) {
 async function sendTelegramMessageWithWebApp(chatId: number, text: string, webAppUrl: string) {
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
-    await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            chat_id: chatId,
-            text: text,
-            parse_mode: 'Markdown',
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        {
-                            text: "📱 Open ArcWallet",
-                            web_app: {
-                                url: webAppUrl
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: chatId,
+                text: text,
+                parse_mode: 'HTML',
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            {
+                                text: "📱 Open ArcWallet",
+                                web_app: {
+                                    url: webAppUrl
+                                }
                             }
-                        }
-                    ] // You can add more buttons here like [ {text: "Join Community", url: "https://t.me/..."} ]
-                ]
-            }
-        })
-    });
+                        ]
+                    ]
+                }
+            })
+        });
+
+        const data = await response.json();
+        if (!data.ok) {
+            console.error('[Telegram API Error]', data.description);
+        }
+    } catch (e) {
+        console.error('[Telegram Fetch Error]', e);
+    }
 }
