@@ -183,8 +183,12 @@ export async function getOrCreateWallet(userId: string, blockchain: string = 'ar
     let existingRefId: string | null = null;
     let foundWallets: any[] = [];
     try {
-        // Query Circle directly by refId for efficiency and to avoid pagination issues
-        const { data } = await client.listWallets({ walletSetId, refId: userId });
+        // Query Circle directly by refId. Use a large pageSize to ensure we don't miss them due to pagination limits.
+        const { data } = await client.listWallets({
+            walletSetId,
+            refId: userId,
+            pageSize: 50 // Pull max allowed to prevent pagination from hiding users
+        });
         foundWallets = data?.wallets?.filter((w: any) => w.accountType === 'SCA') || [];
 
         if (foundWallets.length > 0) {
@@ -220,8 +224,6 @@ export async function getOrCreateWallet(userId: string, blockchain: string = 'ar
             accountType: 'SCA',
             count: 1,
             idempotencyKey: setIdempotencyKey,
-            // CRITICAL: For multi-blockchain creation, pass a SINGLE metadata object, NOT an array!
-            // This single metadata applies to all blockchains and ensures deterministic address derivation.
             metadata: [
                 {
                     name: `AGENT-SCA-UNIVERSAL`,
@@ -234,7 +236,6 @@ export async function getOrCreateWallet(userId: string, blockchain: string = 'ar
             throw new Error('Failed to create wallets - empty response');
         }
 
-        // Map all created wallets to cache
         let requestedResult: any = null;
         newWallets.wallets.forEach((w: any) => {
             const result = {
@@ -250,18 +251,41 @@ export async function getOrCreateWallet(userId: string, blockchain: string = 'ar
         const universalAddress = newWallets.wallets[0].address;
         console.log(`[ServerWallet] ✅ Created ${newWallets.wallets.length} SCA wallets with UNIVERSAL address: ${universalAddress}`);
 
-        // Verify all addresses match
-        const addressSet = new Set(newWallets.wallets.map((w: any) => w.address));
-        if (addressSet.size === 1) {
-            console.log(`[ServerWallet] ✅ Address consistency verified across ${newWallets.wallets.length} chains`);
-        } else {
-            console.warn(`[ServerWallet] ⚠️ WARNING: Got ${addressSet.size} different addresses:`, Array.from(addressSet));
-        }
-
         return requestedResult || userWallets.get(blockchainId)!;
 
     } catch (createError: any) {
-        console.error(`[ServerWallet] Universal SCA creation error:`, createError.message);
+        // Fallback: If we got a 409 Conflict (Duplicate Idempotency) it means the wallets WERE created
+        // but perhaps a previous network call timed out before returning them to us.
+        console.warn(`[ServerWallet] Universal SCA creation conflict/error:`, createError.message);
+
+        if (createError.message?.includes('409') || createError.message?.toLowerCase().includes('duplicate') || createError.message?.toLowerCase().includes('idempotency')) {
+            console.log(`[ServerWallet] Idempotency conflict detected. Waiting 2s and re-fetching wallets...`);
+            await new Promise(r => setTimeout(r, 2000));
+
+            try {
+                const { data } = await client.listWallets({ walletSetId, refId: userId, pageSize: 50 });
+                const foundWallets = data?.wallets?.filter((w: any) => w.accountType === 'SCA') || [];
+
+                if (foundWallets.length > 0) {
+                    console.log(`[ServerWallet] Recovery successful! Found ${foundWallets.length} existing wallets.`);
+                    foundWallets.forEach((w: any) => {
+                        userWallets!.set(w.blockchain, {
+                            walletId: w.id!,
+                            address: w.address!,
+                            accountType: 'SCA',
+                            timestamp: Date.now()
+                        });
+                    });
+
+                    if (userWallets.has(blockchainId)) {
+                        return userWallets.get(blockchainId)!;
+                    }
+                }
+            } catch (recoveryErr: any) {
+                console.error(`[ServerWallet] Recovery failed:`, recoveryErr.message);
+            }
+        }
+
         throw createError;
     }
 }
