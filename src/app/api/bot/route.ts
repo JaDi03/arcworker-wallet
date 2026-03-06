@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 
         if (text.startsWith('/start')) {
             // 1. Send an initial "typing" action or immediate "Creating wallet..." message to acknowledge
-            const welcomeMsg = `🤖 <b>¡Bienvenido a ArcWorker Wallet!</b>\nLa infraestructura más rápida para operar en Web3.\n\n⏳ <i>Aprovisionando tu Smart Wallet en Arc Testnet...</i>`;
+            const welcomeMsg = `🤖 <b>Welcome to ArcWorker Wallet!</b>\nThe fastest infrastructure for Web3 operations.\n\n⏳ <i>Provisioning your Smart Wallet on Arc Testnet...</i>`;
             await sendTelegramMessage(chatId, welcomeMsg);
 
             // 2. Safely create or fetch the Circle developer-controlled wallet
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
                 console.log(`[Telegram Webhook] Wallet ensured for ${userId}: ${wallet.address}`);
 
                 // 3. Send the final message with the Web App button
-                const successMsg = `✅ <b>Smart Wallet Activada</b>\n\n👤 <b>Usuario:</b> @${username}\n💳 <b>Dirección:</b> <code>${wallet.address}</code>\n⚡ <b>Red:</b> ARC Testnet\n\n👇 Haz clic abajo para entrar y gestionar tus fondos:`;
+                const successMsg = `✅ <b>Smart Wallet Activated</b>\n\n👤 <b>User:</b> @${username}\n💳 <b>Address:</b> <code>${wallet.address}</code>\n⚡ <b>Network:</b> ARC Testnet\n\n👇 Click below to open and manage your assets:`;
 
                 await sendTelegramMessageWithWebApp(
                     chatId,
@@ -56,13 +56,13 @@ export async function POST(req: Request) {
 
             } catch (error: any) {
                 console.error(`[Telegram Webhook] Failed to create wallet for ${userId}:`, error);
-                await sendTelegramMessage(chatId, `⚠️ <b>Error de Creación</b>\n\nLo sentimos, hubo un problema técnico aprovisionando tu billetera. Por favor intenta más tarde.\n\n<i>Detalle: ${error.message}</i>`);
+                await sendTelegramMessage(chatId, `⚠️ <b>Creation Error</b>\n\nSorry, we encountered a technical issue while provisioning your wallet. Please try again later.\n\n<i>Details: ${error.message}</i>`);
             }
         } else {
             // Unrecognized command
             await sendTelegramMessageWithWebApp(
                 chatId,
-                `🤖 <b>ArcWorker Bot</b>\n\nUtiliza el comando /start para ver tu perfil, o abre directamente tu billetera en el botón de abajo.👇`,
+                `🤖 <b>ArcWorker Bot</b>\n\nUse the /start command to view your profile, or directly open your wallet using the button below.👇`,
                 NEXT_PUBLIC_URL
             );
         }
