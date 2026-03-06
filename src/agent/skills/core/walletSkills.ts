@@ -2,50 +2,30 @@
 import { sendTransfer } from "@/lib/wallet-sdk";
 import { ToolResult, AgentContext } from "../../types";
 
-const CLIENT_URL = process.env.NEXT_PUBLIC_CLIENT_URL || "";
-const CLIENT_KEY = process.env.NEXT_PUBLIC_CLIENT_KEY || "";
-
 export const WalletSkills = {
     /**
-     * Get Address Balance (Defaults to Arc Hub)
+     * Get Address Balance (Defaults to All Chains)
+     * CRITICAL: Uses direct imports instead of HTTP loopback to avoid ECONNREFUSED on Vercel.
      */
     getBalance: async (context: AgentContext, chain?: string, tokenSymbol?: string): Promise<ToolResult> => {
         try {
-            console.log(`[DEBUG] WalletSkills.getBalance called for userId: ${context.userId}, chain: ${chain}, token: ${tokenSymbol}`);
-            const { resolveChainKey } = await import("../cross-chain/bridgeSkill");
+            console.log(`[WalletSkills] getBalance called for userId: ${context.userId}, chain: ${chain}, token: ${tokenSymbol}`);
 
-            const targetChains = chain
-                ? [resolveChainKey(chain)]
+            // Direct imports - no HTTP loopback (ECONNREFUSED on Vercel serverless)
+            const { getOrCreateWallet } = await import('@/lib/serverWallet');
+            const { getAllTokenBalances } = await import('@/lib/tokenDetection');
+            const { resolveChainKey } = await import('../cross-chain/bridgeSkill');
+
+            const targetChains: Array<'arcTestnet' | 'ethereumSepolia' | 'baseSepolia'> = chain
+                ? [resolveChainKey(chain) as 'arcTestnet' | 'ethereumSepolia' | 'baseSepolia']
                 : ['arcTestnet', 'ethereumSepolia', 'baseSepolia'];
 
-            const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
-            const url = `${baseUrl}/api/wallet`;
+            // Get the wallet address for this user
+            const wallet = await getOrCreateWallet(context.userId || '', 'arcTestnet');
+            console.log(`[WalletSkills] Fetching balances for address: ${wallet.address}`);
 
-            console.log(`[DEBUG] Fetching balances from: ${url}`);
-
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'getAllBalances',
-                    userId: context.userId,
-                    chains: targetChains,
-                    tokenSymbol: tokenSymbol
-                }),
-            });
-
-            console.log(`[DEBUG] API Response Status: ${response.status}`);
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error(`[DEBUG] API Error Body: ${errorText}`);
-                throw new Error(`API Error ${response.status}: ${errorText}`);
-            }
-
-            const data = await response.json();
-            console.log(`[DEBUG] API Data received:`, JSON.stringify(data));
-
-            const tokenBalances = data.balances || [];
+            const tokenBalances = await getAllTokenBalances(wallet.address, targetChains, tokenSymbol);
+            console.log(`[WalletSkills] Token balances found: ${tokenBalances.length}`);
 
             if (tokenBalances.length === 0) {
                 return {
@@ -57,7 +37,7 @@ export const WalletSkills = {
             }
 
             if (!chain) {
-                // Multi-chain Portfolio Check
+                // Multi-chain Portfolio view
                 const report = tokenBalances.map((t: any) => `- ${t.balance} ${t.symbol} on ${t.chain}`).join('\n');
                 return {
                     success: true,
@@ -66,7 +46,7 @@ export const WalletSkills = {
                 };
             }
 
-            // Specific Chain Check
+            // Specific chain balance
             const report = tokenBalances.map((t: any) => `${t.balance} ${t.symbol}`).join(', ');
             return {
                 success: true,
@@ -74,7 +54,7 @@ export const WalletSkills = {
                 data: tokenBalances
             };
         } catch (e: any) {
-            console.error(`[DEBUG] createWallet/getBalance Failed:`, e);
+            console.error(`[WalletSkills] getBalance Failed:`, e);
             return { success: false, message: `Failed to fetch balance: ${e.message}` };
         }
     },
@@ -95,7 +75,6 @@ export const WalletSkills = {
 
             console.log(`[WalletSkills] Executing Transfer: ${amount} USDC -> ${to} on ${chainKey}`);
 
-            // SERVER-SIDE EXECUTION (No session needed, uses Developer Wallet)
             try {
                 // 1. Get Wallet
                 const { getOrCreateWallet, executeTransaction } = await import("@/lib/serverWallet");
@@ -136,7 +115,7 @@ export const WalletSkills = {
 
             } catch (serverError: any) {
                 console.error("Server Transfer Failed:", serverError);
-                throw serverError; // Let catch block below handle it
+                throw serverError;
             }
 
         } catch (e: any) {
@@ -147,67 +126,47 @@ export const WalletSkills = {
 
     /**
      * Faucet Request (Multi-chain)
-     * IMPORTANT: The faucet should use the wallet address for the SPECIFIC chain requested.
-     * If the user doesn't have a wallet on that chain, it will be created automatically.
+     * CRITICAL: Uses direct imports instead of HTTP loopback to avoid ECONNREFUSED on Vercel.
      */
     requestFaucet: async (context: AgentContext, chain?: string): Promise<ToolResult> => {
         const targetChain = chain || 'arcTestnet';
         console.log(`[WalletSkills] Requesting Faucet for ${context.userId} on ${targetChain}`);
-        console.log(`[WalletSkills] Context userAddress: ${context.userAddress}`);
 
         try {
-            const baseUrl = process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
-            
-            // CRITICAL: Don't pass address - let the API get/create the correct wallet for this chain
-            // This ensures we use the RIGHT address for the RIGHT chain
-            const response = await fetch(`${baseUrl}/api/wallet`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'faucet',
-                    userId: context.userId,
-                    blockchain: targetChain
-                    // NOTE: NOT passing address - API will get/create wallet for this specific chain
-                }),
-            });
+            // Direct imports - avoid HTTP loopback (fails on Vercel serverless)
+            const { getOrCreateWallet, requestTestnetTokens } = await import('@/lib/serverWallet');
 
-            if (!response.ok) {
-                const error = await response.text();
-                throw new Error(error);
-            }
+            // Get or create wallet for the specific chain
+            const wallet = await getOrCreateWallet(context.userId || '', targetChain);
+            const faucetAddress = wallet.address;
+            console.log(`[WalletSkills] Using wallet address ${faucetAddress} on ${targetChain}`);
 
-            const data = await response.json();
+            const result = await requestTestnetTokens(context.userId || '', faucetAddress, targetChain);
 
-            if (data.success) {
-                // Check if there's a transaction hash or message from Circle
-                const txInfo = data.message || '';
-                const faucetAddress = data.data?.address || context.userAddress;
-                
-                console.log(`[WalletSkills] ✅ Faucet success for ${targetChain}. Address used: ${faucetAddress}`);
-                
+            if (result.success) {
+                const txInfo = result.message || '';
                 return {
                     success: true,
                     message: `✅ Faucet Request Submitted!\n${txInfo}\n\nNetwork: ${targetChain}\nAddress: ${faucetAddress}\n\nTokens typically arrive in 1-5 minutes. Check your balance shortly.`,
-                    data: data
+                    data: result
                 };
             } else {
-                throw new Error(data.error || 'Unknown error');
+                throw new Error((result as any).error || 'Unknown error');
             }
 
         } catch (e: any) {
             console.error(`[WalletSkills] Faucet failed:`, e);
 
-            // Handle clean rate limit message if it comes from our API
             if (e.message?.includes("⏳ Faucet Cooldown")) {
                 return {
                     success: false,
-                    message: e.message, // Return the clean message directly
+                    message: e.message,
                     action: "faucet_card"
                 };
             }
 
             return {
-                success: false, // Return false so the agent knows it failed
+                success: false,
                 message: `⚠️ Auto-Faucet failed: ${e.message}.\n\nYou can try manually at the official faucet:`,
                 data: { url: "https://faucet.circle.com", address: context.userAddress },
                 action: "faucet_card"
