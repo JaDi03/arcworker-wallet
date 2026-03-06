@@ -143,7 +143,7 @@ export const SwapSkill = {
                 address: fromAddress as `0x${string}`,
                 abi: ERC20_ABI,
                 functionName: 'balanceOf',
-                args: [userAddress]
+                args: [userAddress as `0x${string}`]
             }) as bigint;
 
             if (balance < amountIn) {
@@ -207,10 +207,10 @@ export const SwapSkill = {
 
             return {
                 success: true,
-                message: `✅ Swap Successful! Swapped ${amount} ${fromToken} for ~${formatUnits(expectedOut, toDecimals)} ${toToken} on ${config.name}.\n🔗 TX: [${swapResult.txHash.substring(0, 8)}...](${config.explorer}/tx/${swapResult.txHash})`,
+                message: `✅ Swap Successful! Swapped ${amount} ${fromToken} for ~${formatUnits(expectedOut, toDecimals)} ${toToken} on ${config.name}.\n🔗 TX: [${(swapResult.txHash ?? '').substring(0, 8)}...](${config.explorer}/tx/${swapResult.txHash ?? ''})`,
                 data: {
-                    txHash: swapResult.txHash,
-                    explorer: `${config.explorer}/tx/${swapResult.txHash}`,
+                    txHash: swapResult.txHash ?? '',
+                    explorer: `${config.explorer}/tx/${swapResult.txHash ?? ''}`,
                     amountIn: amount,
                     expectedOut: formatUnits(expectedOut, toDecimals),
                     minOut: formatUnits(minOut, toDecimals),
