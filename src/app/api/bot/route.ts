@@ -5,7 +5,7 @@ import { getOrCreateWallet } from '@/lib/serverWallet';
 export const maxDuration = 60;
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const NEXT_PUBLIC_URL = process.env.NEXT_PUBLIC_URL || 'https://modular-wallet.vercel.app'; // Fallback to production URL
+const NEXT_PUBLIC_URL = process.env.NEXT_PUBLIC_URL || 'https://arcworker-wallet.vercel.app'; // Fallback to production URL
 
 /**
  * Handle incoming Telegram Webhook updates
