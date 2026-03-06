@@ -9,10 +9,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { WalletSession } from "@/lib/wallet-sdk";
 
 function AppContent() {
-    const { webApp, user, isReady } = useTelegram();
+    const { webApp, user, userId, isReady } = useTelegram();
     const [session, setSession] = useState<WalletSession | null>(null);
     const [view, setView] = useState<"dashboard" | "agent">("dashboard");
-    const [userId, setUserId] = useState<string | null>(null);
 
     // Chat Persistence
     const [messages, setMessages] = useState<Message[]>([
@@ -35,32 +34,7 @@ function AppContent() {
         setView("dashboard");
     };
 
-    // === STEP 1: Derive userId AFTER component mounts ===
-    // Read Telegram SDK directly from window (it's synchronous) instead of
-    // relying on the TelegramProvider's useEffect which hasn't fired yet
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
 
-        const tg = (window as any).Telegram?.WebApp;
-        const tgUser = tg?.initDataUnsafe?.user;
-
-        if (tgUser?.id) {
-            const tgId = `tg_${tgUser.id}`;
-            console.log(`[Identity] Telegram user detected: ${tgId}`);
-            setUserId(tgId);
-        } else {
-            // Browser fallback (local dev or direct URL access)
-            let browserId = localStorage.getItem('wallet_user_id');
-            if (!browserId) {
-                browserId = `browser_${Math.random().toString(36).substring(2, 12)}`;
-                localStorage.setItem('wallet_user_id', browserId);
-            }
-            console.log(`[Identity] Browser fallback: ${browserId}`);
-            setUserId(browserId);
-        }
-    }, []);
-
-    // === STEP 2: Auto-login AFTER userId is finalized ===
     useEffect(() => {
         if (!userId || session) return;
 
@@ -104,11 +78,14 @@ function AppContent() {
         setMessages([]); // Clear chat on logout
     };
 
-    // === LOADING: Wait for userId to resolve before rendering anything ===
-    if (!userId) {
+    // === LOADING: Wait for SDK and userId to resolve before rendering anything ===
+    if (!isReady || !userId) {
         return (
             <main className="flex min-h-screen flex-col items-center justify-center bg-slate-50 dark:bg-slate-950">
-                <div className="animate-pulse text-slate-500 dark:text-slate-400">Loading wallet...</div>
+                <div className="animate-pulse flex flex-col items-center gap-4">
+                    <img src="/logo.png" alt="Loading" className="h-12 w-auto opacity-50" />
+                    <span className="text-slate-500 dark:text-slate-400">Loading wallet identity...</span>
+                </div>
             </main>
         );
     }
