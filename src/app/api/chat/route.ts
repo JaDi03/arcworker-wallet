@@ -16,8 +16,8 @@ interface RequestBody {
 }
 
 // Allow streaming responses (though we might return JSON for simplicity first)
-// Max duration for Edge/Serverless functions (Local can be infinite, Vercel Pro 300s, Enterprise 900s)
-export const maxDuration = 900;
+// Max duration for Edge/Serverless functions (Local can be infinite, Vercel Hobby 60s max)
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
     try {
