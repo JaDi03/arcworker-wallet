@@ -13,13 +13,14 @@ function AppContent() {
     const [session, setSession] = useState<WalletSession | null>(null);
     const [view, setView] = useState<"dashboard" | "agent">("dashboard");
 
-    // Browser-only mode - always use persistent browser userId
-    // Need to check for window because this runs during SSR
+    // Prioritize Telegram User ID first to ensure same wallet across mobile/desktop
     let finalUserId: string | null = null;
-    
-    if (typeof window !== 'undefined') {
+
+    if (user?.id) {
+        finalUserId = `tg_${user.id}`;
+    } else if (typeof window !== 'undefined') {
+        // Fallback for when testing the web app outside of Telegram
         finalUserId = localStorage.getItem('wallet_user_id');
-        
         if (!finalUserId) {
             finalUserId = `browser_${Math.random().toString(36).substring(2, 12)}`;
             localStorage.setItem('wallet_user_id', finalUserId);
@@ -60,9 +61,9 @@ function AppContent() {
     // Auto-Login for Demo (Bypass WalletConnect UI)
     useEffect(() => {
         if (!userId) return;
-        
+
         let isMounted = true;
-        
+
         const autoLogin = async () => {
             try {
                 // Fetch autonomous wallet
@@ -93,7 +94,7 @@ function AppContent() {
         if (!session) {
             autoLogin();
         }
-        
+
         return () => {
             isMounted = false;
         };
