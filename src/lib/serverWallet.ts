@@ -400,7 +400,7 @@ export async function executeContractCall(
     const client = getCircleClient();
     const blockchainId = getBlockchainId(blockchain);
 
-    console.log(`[ServerWallet] Executing contract call: ${functionSignature} on ${contractAddress}`);
+    console.log(`[ServerWallet] Executing contract call: ${functionSignature} on ${contractAddress} (chain: ${blockchain} -> ${blockchainId})`);
 
     try {
         const txParams = {
@@ -409,7 +409,12 @@ export async function executeContractCall(
             abiFunctionSignature: functionSignature,
             abiParameters: parameters,
             blockchain: blockchainId,
-            feeLevel: 'MEDIUM', // REST API expects feeLevel as a direct string
+            fee: {
+                type: 'level',
+                config: {
+                    feeLevel: 'MEDIUM'
+                }
+            },
             idempotencyKey: uuidv4()
         };
         const { data: txData } = await (client as any).createContractExecutionTransaction(txParams);
